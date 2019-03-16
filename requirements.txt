@@ -1,0 +1,13 @@
+starlette
+databases
+cv2
+
+
+websocket-client==0.47
+plexapi>=3.0.6
+numpy
+configobj
+
+
+pymsql
+aiomysql
