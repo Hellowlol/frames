@@ -60,9 +60,3 @@ def video_frame_by_frame(path, offset=0, frame_range=None, step=1, end=None):
                 break
 
     cap.release()
-
-    # Keeping it for now, i cant remember if its needed but seems to be a issue
-    # for opencv 4 with the contrib version.
-    # if hasattr(cv2, 'destroyAllWindows'):
-    #    cv2.destroyAllWindows()
-

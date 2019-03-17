@@ -23,6 +23,11 @@ async def homepage(request):
     return JSONResponse({'hello': 'world'})
 
 
+@app.route('/api/add')
+async def add(request):
+    pass
+
+
 
 if __name__ == '__main__':
     uvicorn.run(app, host='0.0.0.0', port=8000)
