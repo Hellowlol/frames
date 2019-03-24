@@ -14,38 +14,54 @@ from frames.tasks import add_to_db
 
 
 @click.group(help='frames []')
-@click.option('-du', '--db_url', default=None)
-@click.option('-df', '--default_folder', default=None)
+@click.option('-du', '--db_url', default=None, help='mysql url') # sqlite support is planned but untested.
+@click.option('-df', '--default_folder', default=None, help='default folder to store logs etc.')
 @click.pass_context
 def cli(ctx, db_url, default_folder):
+    """Welcome to frames.
+
+    This project is just started and should be considered
+    experimental and unstable.
+    """
     pass
 
 
 @cli.command()
-@click.option('--host', default='0.0.0.0')
-@click.option('--port', default=8888)
-@click.option('--debug', default=False)
+@click.option('--host', default='0.0.0.0', help='Interface the webserver should listen on')
+@click.option('--port', default=8888, help='Default port')
+@click.option('--debug', default=False, help='Set debug mode') # Currently does nothing.
 @click.pass_context
 def serve(ctx, host, port, debug):
+    """Starts the webserver."""
     uvicorn.run(app, host=host, port=port)
 
 
 @cli.command()
 @click.option('--name', default=None)
-@click.option('--dur', default=600, type=int)
-@click.option('--sample', default=None, type=int)
-@click.option('--step', default=1, type=int)
-@click.option('--threads', default=4, type=int)
-@click.option('--nice', default=10, type=int)
+@click.option('--dur', default=600, type=int, help='Duration in seconds we should stop hashing')
+@click.option('--sample', default=None, type=int, help='Sample other episode n times of that season.')
+@click.option('--full', default=False, type=bool, help='Hash every file from all episodes')
+@click.option('--step', default=1, type=int, help='ever n frame we should hash')  # check the db result. we could probably set this higher and get the same phash.
+@click.option('--threads', default=4, type=int, help='How many threads should the threadpool use')
+@click.option('--nice', default=None, type=int, help='Set niceness of the process.')
 @click.pass_context
-def add_hash(ctx, name, dur, sample, step, threads, nice):
+def add_hash(ctx, name, dur, full, sample, step, threads, nice):
     from plexapi.server import PlexServer
-    import psutil
 
-    # Lets keep this for now as this shit keeps
-    # hogging my gaming rig.
-    #p = psutil.Process(os.getpid())
-    #p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+    if nice:
+        try:
+            os.nice(nice)
+        except AttributeError:
+            try:
+                import psutil
+                # Lets keep this for now as this shit keeps
+                # hogging my gaming rig.
+                p = psutil.Process(os.getpid())
+                p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+            except ImportError:
+                LOG.debug('psutil is required to set nice on windows')
+        except OSError:
+            pass
 
     # Add this to config.
     pool = ThreadPool(threads)
@@ -70,18 +86,19 @@ def add_hash(ctx, name, dur, sample, step, threads, nice):
             for season in show.seasons():
                 try:
                     eps = season.episodes()
-                    eps = eps[::2]
-                    if len(eps) >= sample:
-                        all_items.extend(eps)
+                    if full is False:
+                        eps = eps[::2]
+                        if len(eps) >= sample:
+                            all_items.extend(eps)
+
+                        else:
+                            LOG.debug('Skipping %s season %s are there are not enough eps to get '
+                                      'every n episode with sample %s' %
+                                      (show.title, season.index, sample))
                     else:
-                        LOG.debug('Skipping %s season %s are there are not enough eps to get '
-                                  'every n episode with sample %s' %
-                                  (show.title, season.index, sample))
+                        all_items.extend(eps)
                 except: # pragma: no cover
                     pass
-
-    def nothing(media):
-        LOG.debug(media)
 
     def to_db(media):
         """ Just we can do the processing in a thread pool"""
@@ -103,9 +120,16 @@ def add_hash(ctx, name, dur, sample, step, threads, nice):
     except KeyboardInterrupt:
         raise
 
+    pool.terminate()
+    pool.join()
+
 
 @cli.command()
 def add_ref():
+    """Starts a gui where you can select a referance frames
+    that gets added to the db.
+
+    """
     pass
 
 
@@ -114,6 +138,7 @@ def add_ref():
 @click.argument('season')
 @click.argument('episode')
 def check_db(tvdbid, season, episode):
+    """Will be removed later."""
     # Remove later
     r = []
     P = 0.7

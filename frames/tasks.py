@@ -14,7 +14,8 @@ def add_to_db(path, tvdbid, season, episode,
         row = Hashes(hash=str(imghash),
                      season=season,
                      episode=episode,
-                     tvdbid=tvdbid)
+                     tvdbid=tvdbid,
+                     offset=pos)
         hashes.append(row)
 
         if addimg:
