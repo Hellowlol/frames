@@ -82,7 +82,6 @@ def init_db(url):
     return DB
 
 
-
 @contextmanager
 def session_scope():
     """Provide a transactional scope around a series of operations."""  # for sync cli.
