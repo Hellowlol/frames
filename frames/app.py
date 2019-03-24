@@ -95,6 +95,7 @@ async def sql(request):
     episode = request.path_params['episode']
 
     conf = 0.7
+    # this should probably be changed as we should just remove enogh episodes.
     episode_statement = text("SELECT COUNT(DISTINCT episode) FROM frames.hashes "
                              "WHERE tvdbid = :tvdbid and season = :season").bindparams(tvdbid=tvdbid,
                                                                                        season=season)

@@ -1,7 +1,9 @@
 import binascii
+
+import cv2
 import numpy as np
 
-from video import video_frame_by_frame
+from frames.video import video_frame_by_frame
 
 
 image_type = ('.png', '.jpeg', '.jpg')
@@ -61,20 +63,16 @@ class ImageHash(object):
         return self.hash.reshape(*args)
 
 
-
 def create_imghash(img):
-    """Create a phash"""
-    import cv2
-
+    """Create a phash of a image/frame"""
     if isinstance(img, str):
         img = cv2.imread(img, 0)
 
     return cv2.img_hash.pHash(img)
 
 
-
 def hash_file(path, step=1, frame_range=False, end=None):
-    # dont think this is need. Lets keep it for now.
+    """Hash a file or image."""
     if isinstance(path, str) and path.endswith(image_type):
         yield ImageHash(create_imghash(path)), cv2.imread(path, 0), 0
         return

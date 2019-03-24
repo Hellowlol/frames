@@ -2,9 +2,7 @@ import os
 
 import click
 
-from frames import LOG
-from frames import CONFIG
-
+from frames import CONFIG, LOG
 
 
 def check_file_access(m, PMS):
@@ -52,16 +50,14 @@ def extract_id(s):
          'episode': ''}
     agent, ident = s.split('://')
 
-
     if agent.endswith('thetvdb'):
         show, season, ep = ident.split('?')[0].split('/')
         d['type'] = 'thetvdb'
         d['season'] = int(season)
         d['show'] = show
         d['episode'] = int(ep)
-    
-    return d
 
+    return d
 
 
 def find_all_movies_shows(pms):  # pragma: no cover
@@ -83,6 +79,7 @@ def find_all_movies_shows(pms):  # pragma: no cover
 
 
 def choose(msg, items, attr):
+    """Helper to choose something from iterable."""
     result = []
 
     if not len(items):

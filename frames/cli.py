@@ -1,21 +1,16 @@
-
-
-
-import sys
 import os
+
+from functools import partial
 from multiprocessing.pool import ThreadPool
-
-
 
 import click
 import uvicorn
 
-
-from frames import LOG, init_frames
-from frames.db import init_db, Hashes, session_scope
-from frames.hashing import hash_file
+from frames import LOG
+from frames.db import Hashes, session_scope
 from frames.misc import find_all_movies_shows, choose, extract_id, check_file_access
 from frames.app import app
+from frames.tasks import add_to_db
 
 
 @click.group(help='frames []')
@@ -24,8 +19,6 @@ from frames.app import app
 @click.pass_context
 def cli(ctx, db_url, default_folder):
     pass
-    #init_frames(default_folder, db_url)
-    #ctx.obj = init_db(dburl)
 
 
 @cli.command()
@@ -43,9 +36,17 @@ def serve(ctx, host, port, debug):
 @click.option('--sample', default=None, type=int)
 @click.option('--step', default=1, type=int)
 @click.option('--threads', default=4, type=int)
+@click.option('--nice', default=10, type=int)
 @click.pass_context
-def add_hash(ctx, name, dur, sample, step, threads):
+def add_hash(ctx, name, dur, sample, step, threads, nice):
     from plexapi.server import PlexServer
+    import psutil
+
+    # Lets keep this for now as this shit keeps
+    # hogging my gaming rig.
+    #p = psutil.Process(os.getpid())
+    #p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+
     # Add this to config.
     pool = ThreadPool(threads)
     PMS = PlexServer()
@@ -82,38 +83,20 @@ def add_hash(ctx, name, dur, sample, step, threads):
     def nothing(media):
         LOG.debug(media)
 
-
     def to_db(media):
         """ Just we can do the processing in a thread pool"""
         # extract the tvdb and the season
         media_key = extract_id(media.guid)
+        path = check_file_access(media, PMS)
 
-        # TODO remove with job from task.
-        @LOG.catch
-        def zomg():
-            hashed_file = []
-            for imghash, frame, pos in hash_file(check_file_access(media, PMS),
-                                                 frame_range=False,
-                                                 end=dur,
-                                                 step=step
-                                                 ):
-                img = Hashes(hash=str(imghash),
-                             season=media_key['season'],
-                             episode=media_key['episode'], 
-                             offset=pos,
-                             tvdbid=media_key['show'],
-                             )
-                hashed_file.append(img)
-
-            with session_scope() as ssee:
-                ssee.add_all(hashed_file)
-
-            LOG.debug('Added %s %s to db' % (media.grandparentTitle, media.seasonEpisode))
+        zomg = partial(add_to_db, path, media_key['show'], media_key['season'], media_key['episode'])
 
         try:
             zomg()
         except KeyboardInterrupt:
             raise
+
+        LOG.debug('Added %s %s to db' % (media.grandparentTitle, media.seasonEpisode))
 
     try:
         pool.map(to_db, all_items, 1)
