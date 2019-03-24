@@ -1,5 +1,6 @@
-import cv2
 
+import cv2
+from frames import LOG
 
 
 def video_frame_by_frame(path, offset=0, frame_range=None, step=1, end=None):
@@ -56,7 +57,7 @@ def video_frame_by_frame(path, offset=0, frame_range=None, step=1, end=None):
                 break
 
             if end and pos / 1000 > end:
-                LOG.debug('Stopped reading the file because of %s', end)
+                LOG.debug('Stopped reading the file because of %s' % end)
                 break
 
     cap.release()

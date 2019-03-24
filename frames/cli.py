@@ -5,34 +5,32 @@ import sys
 import os
 from multiprocessing.pool import ThreadPool
 
-# Remove this shit later.
-fp = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, fp)
+
 
 import click
 import uvicorn
 
 
-from frames import LOG
-from frames.db import init_db, Hashes
-from frames.misc import find_all_movies_shows, choose, extract_id
+from frames import LOG, init_frames
+from frames.db import init_db, Hashes, session_scope
+from frames.hashing import hash_file
+from frames.misc import find_all_movies_shows, choose, extract_id, check_file_access
 from frames.app import app
 
 
-
-DB = None
-
-
 @click.group(help='frames []')
-@click.option('-dburl')
+@click.option('-du', '--db_url', default=None)
+@click.option('-df', '--default_folder', default=None)
 @click.pass_context
-def cli(ctx, dburl):
-    ctx.obj = init_db(dburl)
+def cli(ctx, db_url, default_folder):
+    pass
+    #init_frames(default_folder, db_url)
+    #ctx.obj = init_db(dburl)
 
 
 @cli.command()
 @click.option('--host', default='0.0.0.0')
-@click.option('--port', default=8080)
+@click.option('--port', default=8888)
 @click.option('--debug', default=False)
 @click.pass_context
 def serve(ctx, host, port, debug):
@@ -43,7 +41,7 @@ def serve(ctx, host, port, debug):
 @click.option('--name', default=None)
 @click.option('--dur', default=600, type=int)
 @click.option('--sample', default=None, type=int)
-@click.option('--step', default=None, type=int)
+@click.option('--step', default=1, type=int)
 @click.option('--threads', default=4, type=int)
 @click.pass_context
 def add_hash(ctx, name, dur, sample, step, threads):
@@ -75,56 +73,52 @@ def add_hash(ctx, name, dur, sample, step, threads):
                     if len(eps) >= sample:
                         all_items.extend(eps)
                     else:
-                        LOG.debug('Skipping %s season %s are there are not enough eps to get every n episode with sample %s' % 
-                                 (show.title, season.index, sample))
+                        LOG.debug('Skipping %s season %s are there are not enough eps to get '
+                                  'every n episode with sample %s' %
+                                  (show.title, season.index, sample))
                 except: # pragma: no cover
                     pass
+
+    def nothing(media):
+        LOG.debug(media)
 
 
     def to_db(media):
         """ Just we can do the processing in a thread pool"""
         # extract the tvdb and the season
+        media_key = extract_id(media.guid)
 
-
+        # TODO remove with job from task.
         @LOG.catch
         def zomg():
-            imgz = []
-            for imghash, frame, pos in hash_file(check_file_access(media),
-                                                 frame_range=True,
+            hashed_file = []
+            for imghash, frame, pos in hash_file(check_file_access(media, PMS),
+                                                 frame_range=False,
                                                  end=dur,
                                                  step=step
                                                  ):
-                img = Hashes(ratingKey=media.ratingKey,
-                             hex=str(imghash),
-                             hash=imghash.hash.tostring(),
-                             
+                img = Hashes(hash=str(imghash),
+                             season=media_key['season'],
+                             episode=media_key['episode'], 
                              offset=pos,
-                             tvdbid=None,
-                             time=to_time(pos / 1000))
-                imgz.append(img)
+                             tvdbid=media_key['show'],
+                             )
+                hashed_file.append(img)
 
             with session_scope() as ssee:
-                ssee.add_all(imgz)
+                ssee.add_all(hashed_file)
+
+            LOG.debug('Added %s %s to db' % (media.grandparentTitle, media.seasonEpisode))
 
         try:
-            zomg():
-        except:
-            pass
+            zomg()
+        except KeyboardInterrupt:
+            raise
 
-    pool.map(to_db, all_items, 1)
-
-    """
-    Hashes = sa.Table(
-    "hashes",
-    metadata,
-    sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("tvdbid_season", sa.Text(length=100)),
-    sa.Column("tvdbid", sa.Text(length=100)),
-    sa.Column('hash', sa.Text(length=16))
-)
-
-    """
-
+    try:
+        pool.map(to_db, all_items, 1)
+    except KeyboardInterrupt:
+        raise
 
 
 @cli.command()
@@ -132,7 +126,39 @@ def add_ref():
     pass
 
 
+@cli.command()
+@click.argument('tvdbid')
+@click.argument('season')
+@click.argument('episode')
+def check_db(tvdbid, season, episode):
+    # Remove later
+    r = []
+    P = 0.7
+    conf = 7
+
+    full_c = P * conf
+
+    from collections import defaultdict
+
+    d = defaultdict(set)
+    with session_scope() as se:
+        r = se.query(Hashes).filter(Hashes.tvdbid==tvdbid, Hashes.season==season)
+        for res in r:
+            d[res.hash].add(res.episode)
+
+    hh = []
+    for k, v in d.items():
+        if len(v) > full_c:
+            print(k, v)
+            hh.append(k)
+
+    print('hh', len(hh))
+    print(full_c)
+    # 1238
+
+
+
 
 
 if __name__ == '__main__':
-    cli()
+    print('use fake main')

@@ -1,9 +1,10 @@
 import binascii
-import os
 import numpy as np
 
 from video import video_frame_by_frame
 
+
+image_type = ('.png', '.jpeg', '.jpg')
 
 
 def _binary_array_to_hex(arr):
@@ -14,7 +15,6 @@ class ImageHash(object):
     """
     Hash encapsulation. Can be used for dictionary keys and comparisons.
     """
-    #__slots__ = ('name', 'pos', 'size', 'add_pos', 'hash')
 
     def __init__(self, binary_array):
         self.hash = binary_array.flatten()
@@ -66,7 +66,7 @@ def create_imghash(img):
     """Create a phash"""
     import cv2
 
-    if isinstance(img, _str):
+    if isinstance(img, str):
         img = cv2.imread(img, 0)
 
     return cv2.img_hash.pHash(img)
@@ -75,7 +75,7 @@ def create_imghash(img):
 
 def hash_file(path, step=1, frame_range=False, end=None):
     # dont think this is need. Lets keep it for now.
-    if isinstance(path, _str) and path.endswith(image_type):
+    if isinstance(path, str) and path.endswith(image_type):
         yield ImageHash(create_imghash(path)), cv2.imread(path, 0), 0
         return
 

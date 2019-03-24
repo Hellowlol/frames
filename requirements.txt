@@ -1,6 +1,6 @@
-starlette
+starlette[full]
 databases
-cv2
+opencv-contrib-python
 
 
 websocket-client==0.47

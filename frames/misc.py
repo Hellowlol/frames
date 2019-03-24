@@ -1,8 +1,9 @@
+import os
 
 import click
 
 from frames import LOG
-from frame import CONFIG
+from frames import CONFIG
 
 
 
@@ -17,7 +18,7 @@ def check_file_access(m, PMS):
             filepath or http to the file.
 
     """
-    LOG.debug('Checking if we can reach %s directly', m._prettyfilename())
+    LOG.debug('Checking if we can reach %s directly' % m._prettyfilename())
 
     files = list(m.iterParts())
     # Now we could get the "wrong" file here.
@@ -33,7 +34,7 @@ def check_file_access(m, PMS):
             for key, value in CONFIG.get('remaps').items():
                 fp = file.file.replace(key, value)
                 if os.path.exists(fp):
-                    LOG.debug('Found %s', fp)
+                    LOG.debug('Found %s' % fp)
                     return fp
         else:
             LOG.warning('Downloading from pms..')
@@ -55,9 +56,9 @@ def extract_id(s):
     if agent.endswith('thetvdb'):
         show, season, ep = ident.split('?')[0].split('/')
         d['type'] = 'thetvdb'
-        d['season'] = season
+        d['season'] = int(season)
         d['show'] = show
-        d['ep'] = ep
+        d['episode'] = int(ep)
     
     return d
 

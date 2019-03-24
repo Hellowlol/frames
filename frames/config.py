@@ -7,7 +7,7 @@ vtor = Validator()
 spec = """
 [general]
 debug = boolean(default=False)
-db = media.db
+db = string(default=media.db)
 [remaps]
 [hashing]
 season_treshold = float(default=0.8)
