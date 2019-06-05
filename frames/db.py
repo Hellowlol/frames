@@ -46,7 +46,7 @@ class Images(Mixin, Base):
     __tablename__ = 'images'
     hash = sa.Column(sa.Text(length=16))
     # https://stackoverflow.com/questions/31849494/serve-image-stored-in-sqlalchemy-largebinary-column
-    img = sa.Column(sa.LargeBinary)
+    img = sa.Column(mysql.LONGBLOB)
 
 
 # Simply a table where we store the computed hashes
@@ -56,12 +56,23 @@ class Intro(Mixin, Base):
     hashes = sa.Column(sa.JSON)
 
 
+class UserImage(Mixin, Base):
+    __tablename__ = 'userimage'
+    hash = sa.Column(sa.String(length=16))
+    type = sa.Column(sa.String(length=16))  # start or end
+    show = sa.Column(sa.Text(length=200))
+    season = sa.Column(sa.Integer)
+    episode = sa.Column(sa.Integer)
+    img = sa.Column(mysql.LONGBLOB)
+
+
 # Add shortcuts to some tables
 # as we are using both core (async via databases) and the orm (sync via cli)
 HASHES_T = Hashes.__table__
 RFT = Reference_Frame.__table__
 IMAGES_T = Images.__table__
 INTRO_T = Intro.__table__
+USER_T = UserImage.__table__
 
 
 def init_db(url):

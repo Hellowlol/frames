@@ -9,5 +9,9 @@ numpy
 configobj
 
 
-pymsql
+#pymsql
 aiomysql
+loguru
+sqlalchemy_utils
+click
+uvicorn

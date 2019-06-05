@@ -1,3 +1,6 @@
+import base64
+import cv2
+
 import sqlalchemy as sa
 from sqlalchemy.sql import text
 
@@ -7,9 +10,13 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.authentication import requires
 from starlette.background import BackgroundTask
 
+import numpy as np
+
 
 from frames import DB, LOG
-from frames.db import HASHES_T, showsql
+from frames.db import HASHES_T, showsql, RFT, IMAGES_T, USER_T
+from frames.hashing import create_imghash, ImageHash
+from frames.misc import from_dataurl_to_cvimage, resize, IMG_TYPES
 
 
 app = Starlette(debug=True)
@@ -127,6 +134,43 @@ async def sql(request):
     LOG.debug('%s season %s got %s hashes' % (tvdbid, season, len(result)))
 
     return api_response(status='success', data=result)
+
+
+@app.route('/api/upload', methods=['POST'])
+async def upload(request):
+    # Lets start with some housekeeping first.
+    five_mb = 5242880
+    if int(request.headers["content-length"]) > five_mb:
+        return api_response(status='error', message='The request was to large, try reduzing the image size.')
+
+    form = await request.form()
+    file_ob = form.get('file')
+    content = ''
+    if file_ob is None:
+        return api_response(status='error', message='Missing file')
+    else:
+        content = await file_ob.read()
+
+    if form['file'].content_type not in IMG_TYPES:
+        message = 'The file type was %s expected %s' % (form['file'].content_type, IMG_TYPES)
+        return api_response(status='error', message=message)
+
+    # Should db insertion be sync bg task.
+    image = from_dataurl_to_cvimage(content)
+
+    # Handle the instert logic. If this shit starts to scale we just find anther way
+    # to store this. for now the db is just fine.
+    ih = ImageHash(cv2.img_hash.pHash(image))
+
+    query = USER_T.insert().values(hash=str(ih),
+                                   tvdbid=form['id'],
+                                   img=content,
+                                   season=int(form['season']),
+                                   episode=int(form['episode']),
+                                   show=form['show'])
+    await DB.execute(query)
+
+    return api_response(status='success')
 
 
 if __name__ == '__main__':
