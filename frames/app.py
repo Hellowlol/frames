@@ -136,7 +136,6 @@ async def upload(request):
 
     form = await request.form()
 
-
     if form['file'].content_type not in IMG_TYPES:
         message = 'The file type was %s expected %s' % (form['file'].content_type, IMG_TYPES)
         LOG.debug(message)
@@ -165,7 +164,8 @@ async def upload(request):
                                    img=content,
                                    season=int(form['season']),
                                    episode=int(form['episode']),
-                                   show=form['show'])
+                                   show=form['show'],
+                                   type=form['type'])
     await DB.execute(query)
 
     LOG.debug('Added %s %s %s with hash %s to the db', form['show'],
