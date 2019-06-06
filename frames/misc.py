@@ -1,14 +1,41 @@
+import base64
 import os
+import re
+
 import click
 import cv2
 import numpy as np
 
 from frames import CONFIG, LOG
 
+
 IMG_TYPES = ('image/jpg', 'image/png')
 
 
+def decode_base64(data, altchars=b'+/'):
+    """Decode base64, padding being optional.
+
+    :param data: Base64 data as an ASCII byte string
+    :returns: The decoded byte string.
+
+    """
+    data = re.sub(rb'[^a-zA-Z0-9%s]+' % altchars, b'', data)  # normalize
+    missing_padding = len(data) % 4
+    if missing_padding:
+        data += b'='* (4 - missing_padding)
+    return base64.b64decode(data, altchars)
+
 def from_dataurl_to_cvimage(stuff):
+    # this accepts both binary and base64url
+    try:
+        head, stuff = stuff.split(b',')
+        if head.statswith('data:'):
+            stuff = decode_base64(stuff)
+            LOG.debug('%s was was dataurl' % stuff[:50])
+        else:
+            raise ValueError
+    except (ValueError):
+        pass
 
     t = np.asarray(bytearray(stuff), dtype="uint8")
     image = cv2.imdecode(t, cv2.IMREAD_COLOR)

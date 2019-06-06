@@ -16,7 +16,7 @@ import numpy as np
 from frames import DB, LOG
 from frames.db import HASHES_T, showsql, RFT, IMAGES_T, USER_T
 from frames.hashing import create_imghash, ImageHash
-from frames.misc import from_dataurl_to_cvimage, resize, IMG_TYPES
+from frames.misc import from_dataurl_to_cvimage, resize, IMG_TYPES, decode_base64
 
 
 app = Starlette(debug=True)
@@ -51,22 +51,6 @@ async def shutdown():
 async def homepage(request):
     # Add some bootstrap page? See https://github.com/encode/starlette-example for ideas
     return JSONResponse({'hello': 'world'})
-
-
-@app.route('/api/add')
-async def add(request):
-    """ Add a video path, tvdbid, season and episode and frames will handle the rest
-
-        never intended for public use.
-
-    """
-    # untested.
-    def nothing(zomg):  # Replace with the one from tasks.py
-        return 'working'
-
-    bg = BackgroundTask(nothing)
-
-    return api_response(message='working on it', task=bg)
 
 
 @app.route('/task/{name:str}')
@@ -138,37 +122,54 @@ async def sql(request):
 
 @app.route('/api/upload', methods=['POST'])
 async def upload(request):
+    """ 
+    the form should contain.
+    id, show, episode, season, file and type
+
+    """
+
     # Lets start with some housekeeping first.
     five_mb = 5242880
     if int(request.headers["content-length"]) > five_mb:
+        LOG.debug('File size to big')
         return api_response(status='error', message='The request was to large, try reduzing the image size.')
 
     form = await request.form()
 
+
     if form['file'].content_type not in IMG_TYPES:
         message = 'The file type was %s expected %s' % (form['file'].content_type, IMG_TYPES)
+        LOG.debug(message)
+        return api_response(status='error', message=message)
+
+    if not form.get('type') or form.get('type') in ('intro', 'outro'):
+        message = 'Missing or invalid type, expected values was intro or outro'
         return api_response(status='error', message=message)
 
     file_ob = form.get('file')
     content = ''
     if file_ob is None:
+        LOG.debug('The user forgot to add the damn file.')
         return api_response(status='error', message='Missing file')
     else:
         content = await file_ob.read()
 
-    # Should db insertion be sync bg task.
     image = from_dataurl_to_cvimage(content)
-
-    # For now lets just store the image in the db base64 encoded.
+    # This is blocking, should we do this in a bgtask?
     ih = ImageHash(cv2.img_hash.pHash(image))
+    ih_str = str(ih)
 
-    query = USER_T.insert().values(hash=str(ih),
+    # Images are stored in binary form.
+    query = USER_T.insert().values(hash=ih_str,
                                    tvdbid=form['id'],
                                    img=content,
                                    season=int(form['season']),
                                    episode=int(form['episode']),
                                    show=form['show'])
     await DB.execute(query)
+
+    LOG.debug('Added %s %s %s with hash %s to the db', form['show'],
+              form['season'], form['episode'], ih_str)
 
     return api_response(status='success')
 
