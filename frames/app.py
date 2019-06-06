@@ -144,6 +144,11 @@ async def upload(request):
         return api_response(status='error', message='The request was to large, try reduzing the image size.')
 
     form = await request.form()
+
+    if form['file'].content_type not in IMG_TYPES:
+        message = 'The file type was %s expected %s' % (form['file'].content_type, IMG_TYPES)
+        return api_response(status='error', message=message)
+
     file_ob = form.get('file')
     content = ''
     if file_ob is None:
@@ -151,15 +156,10 @@ async def upload(request):
     else:
         content = await file_ob.read()
 
-    if form['file'].content_type not in IMG_TYPES:
-        message = 'The file type was %s expected %s' % (form['file'].content_type, IMG_TYPES)
-        return api_response(status='error', message=message)
-
     # Should db insertion be sync bg task.
     image = from_dataurl_to_cvimage(content)
 
-    # Handle the instert logic. If this shit starts to scale we just find anther way
-    # to store this. for now the db is just fine.
+    # For now lets just store the image in the db base64 encoded.
     ih = ImageHash(cv2.img_hash.pHash(image))
 
     query = USER_T.insert().values(hash=str(ih),
