@@ -34,7 +34,12 @@ def api_response(message='', status='success', data=None, task=None):
               "message": message
               }
 
-    return JSONResponse(output, background=task)
+    if status == 'success':
+        status_code = 200
+    else:
+        status_code = 500
+
+    return JSONResponse(output, status_code=status_code, background=task)
 
 
 @app.on_event("startup")
@@ -141,7 +146,7 @@ async def upload(request):
         LOG.debug(message)
         return api_response(status='error', message=message)
 
-    if not form.get('type') or form.get('type') in ('intro', 'outro'):
+    if form.get('type', '') not in ('intro', 'outro'):
         message = 'Missing or invalid type, expected values was intro or outro'
         return api_response(status='error', message=message)
 
