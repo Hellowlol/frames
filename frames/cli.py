@@ -29,11 +29,12 @@ def cli(ctx, db_url, default_folder):
 @cli.command()
 @click.option('--host', default='0.0.0.0', help='Interface the webserver should listen on')
 @click.option('--port', default=8888, help='Default port')
-@click.option('--debug', default=False, help='Set debug mode') # Currently does nothing.
+@click.option('--debug', default=False, is_flag=True, help='Set debug mode') # Currently does nothing.
 @click.pass_context
 def serve(ctx, host, port, debug):
     """Starts the webserver."""
-    uvicorn.run(app, host=host, port=port)
+    app.debug = debug
+    uvicorn.run(app, host=host, port=port, reload=debug)
 
 
 @cli.command()

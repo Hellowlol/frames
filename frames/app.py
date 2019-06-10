@@ -5,18 +5,17 @@ import sqlalchemy as sa
 from sqlalchemy.sql import text
 
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.middleware.gzip import GZipMiddleware
-from starlette.authentication import requires
-from starlette.background import BackgroundTask
-
-import numpy as np
-
+from starlette.concurrency import run_in_threadpool
 
 from frames import DB, LOG
-from frames.db import HASHES_T, showsql, RFT, IMAGES_T, USER_T
-from frames.hashing import create_imghash, ImageHash
-from frames.misc import from_dataurl_to_cvimage, resize, IMG_TYPES, decode_base64
+from frames.hashing import ImageHash
+from frames.misc import from_dataurl_to_cvimage, IMG_TYPES
+
+from frames.db import (HASHES_T, showsql, RFT,
+                       IMAGES_T, USER_T, UserImage,
+                       Reference_Frame, Hashes, Images)
 
 
 app = Starlette(debug=True)
@@ -25,6 +24,7 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 def api_response(message='', status='success', data=None, task=None):
+    """Skeleton for the api response"""
 
     if data is None:
         data = []
@@ -58,36 +58,38 @@ async def homepage(request):
     return JSONResponse({'hello': 'world'})
 
 
-@app.route('/task/{name:str}')
-async def test_task(request):
-    name = request.path_params['name']
-
-    def t(n):
-        print('kek %s' % n)
-        return '%s' % n
-
-    tt = BackgroundTask(t, name)
-
-    return api_response(message='working', task=tt)
-
-
-@app.route('/api/dump/{name:str}')
+@app.route('/api/sql/dump/{name:str}')
 async def dump_hashes_table(request):
+    """Simple way to dump the tables to json."""
     name = request.path_params['name']
     result = []
+
     if name == 'hashes':
-        async for row in DB.iterate(HASHES_T.select()):
-            result.append(dict(row))
+        table = HASHES_T.select()
+
+    elif name == 'userimage':
+        # We skip the img key as this is the binary data.
+        # We dont want to dump this info as they are huge.
+        table = sa.select([col for col in USER_T.columns if col.key != 'img'])
+    elif name == 'reference_frame':
+        table = RFT.select()
+
+    else:
+        return api_response(status='error', message='Invalid table')
+
+    async for row in DB.iterate(table):
+        result.append(dict(row))
 
     return api_response(data=result)
 
 
-@app.route('/sql/{tvdbid:str}/{season:int}/{episode:int}')
+@app.route('/api/sql/{tvdbid:str}/{season:int}/{episode:int}')
 async def sql(request):
     # http://localhost:8888/sql/248742/1/1
 
     tvdbid = request.path_params['tvdbid']
     season = request.path_params['season']
+    # Do we really need this?
     episode = request.path_params['episode']
 
     conf = 0.7
@@ -125,9 +127,37 @@ async def sql(request):
     return api_response(status='success', data=result)
 
 
+@app.route('/api/image/{hash:str}')
+async def show_image(request):
+    """Show a image to a user using the api."""
+    img_hash = request.path_params['hash']
+    q = USER_T.select().where(UserImage.hash == img_hash)
+    result = await DB.execute(q)
+
+    if result is None:
+        return api_response(status='error', message='No images match %s' % img_hash)
+
+    if len(result) > 1:
+        LOG.debug('We have more then one one image with this hash')
+
+    if request.query_params.get('base64', '') in ('true', True):
+        # This should probably be a better method
+        # to do this but it should be enough for now.
+        bs = base64.b64encode(result[0].img)
+        # All the images in the db should be stored as
+        # png anyway, at least if they are upload using
+        # the browser extension.
+        img = 'data:image/png;base64,%s' % bs
+        return Response(img)
+
+    return Response(result[0].img, media_type="image/png")
+
+
 @app.route('/api/upload', methods=['POST'])
 async def upload(request):
-    """ 
+    """
+    Upload command for the api.
+
     the form should contain.
     id, show, episode, season, file and type
 
@@ -158,9 +188,13 @@ async def upload(request):
     else:
         content = await file_ob.read()
 
-    image = from_dataurl_to_cvimage(content)
-    # This is blocking, should we do this in a bgtask?
-    ih = ImageHash(cv2.img_hash.pHash(image))
+    # Need to run this in the threadpool
+    def tb():
+        image = from_dataurl_to_cvimage(content)
+        ih = ImageHash(cv2.img_hash.pHash(image))
+        return ih
+
+    ih = await run_in_threadpool(tb)
     ih_str = str(ih)
 
     # Images are stored in binary form.
