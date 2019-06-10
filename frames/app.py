@@ -148,7 +148,7 @@ async def show_image(request):
         # All the images in the db should be stored as
         # png anyway, at least if they are upload using
         # the browser extension.
-        img = 'data:image/png;base64,%s' % bs
+        img = 'data:image/png;base64,%s' % bs.decode("utf-8") 
         return Response(img)
 
     return Response(result[0].img, media_type="image/png")
