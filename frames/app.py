@@ -132,14 +132,14 @@ async def show_image(request):
     """Show a image to a user using the api."""
     img_hash = request.path_params['hash']
     q = USER_T.select().where(UserImage.hash == img_hash)
-    print(showsql(q))
-    result = await DB.execute(q)
+    result = await DB.fetch_all(q)
 
     if result is None:
         return api_response(status='error', message='No images match %s' % img_hash)
 
     if len(result) > 1:
-        LOG.debug('We have more then one one image with this hash')
+        LOG.debug('We have more then one one image with this hash picking '
+                  'the first one. You should check for duplicates')
 
     if request.query_params.get('base64', '') in ('true', True):
         # This should probably be a better method
