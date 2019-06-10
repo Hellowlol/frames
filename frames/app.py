@@ -132,6 +132,7 @@ async def show_image(request):
     """Show a image to a user using the api."""
     img_hash = request.path_params['hash']
     q = USER_T.select().where(UserImage.hash == img_hash)
+    print(showsql(q))
     result = await DB.execute(q)
 
     if result is None:
