@@ -41,7 +41,7 @@ def serve(ctx, host, port, debug):
 @click.option('--name', default=None)
 @click.option('--dur', default=600, type=int, help='Duration in seconds we should stop hashing')
 @click.option('--sample', default=None, type=int, help='Sample other episode n times of that season.')
-@click.option('--full', default=False, type=bool, help='Hash every file from all episodes')
+@click.option('--full', default=False, type=bool, is_flag=True, help='Hash every file from all episodes')
 @click.option('--step', default=1, type=int, help='ever n frame we should hash')  # check the db result. we could probably set this higher and get the same phash.
 @click.option('--threads', default=4, type=int, help='How many threads should the threadpool use')
 @click.option('--nice', default=None, type=int, help='Set niceness of the process.')
@@ -69,7 +69,7 @@ def add_hash(ctx, name, dur, full, sample, step, threads, nice):
     PMS = PlexServer()
     all_items = []
     medias = find_all_movies_shows(PMS)
-    if sample is None:
+    if sample is None or full is None: # change this.
         if name:
             medias = [s for s in medias if s.title.lower().startswith(name.lower())]
         else:
@@ -164,6 +164,98 @@ def check_db(tvdbid, season, episode):
     print('hh', len(hh))
     print(full_c)
     # 1238
+
+
+@cli.command()
+def test_hexes():
+    from frames.hashing import hash_file
+    from frames.db import UserImage
+    from frames.tools import visulize_intro_from_hashes
+    # C:\stuff\dexter.s01e01.720p.bluray.x264-orpheus.mkv
+    path = r'C:\stuff\Dexter.S01E02.720p.BluRay.DTS.x264-DON.mkv'
+    print(os.path.isfile(path))
+    #hexes = '0968e6e47ef3fffe,'
+    """
+    with session_scope() as se:
+        res = se.query(UserImage).all()
+        print(res)
+        for r in res:
+            new = r'C:\stuff\%s.png' % r.id
+            print(new)
+            with open(new, 'wb') as f:
+                f.write(r.img)
+    return
+    hexes = '6564b6b798dcd7d2, 0968e6e47ef3fffe, 0968e6e47ef3fffe'
+    """
+
+    # ffmpeg -i "C:\stuff\Dexter.S01E02.720p.BluRay.DTS.x264-DON.mkv" -loop 1 -i 1.png -an -filter_complex "blend=difference,blackframe=99:32" -f null -
+    H = ["21c23b76cea3c6ce","33cecc33cee9768c","39bfdadc3676cefb","4ec75403b60f82b2","6564b6b798dcd7d2","6ab2f359279cc6c3","6e3093492597c823","6e3093492597c863","7e30924925b7c863","7e30924925b7d867","7eb0924965b7d867","7eb092496db7984f","7eb092496db7d84f","b39cc66ccfc03b93","b39cc66ccfc13b93","e3cc389a4db5c79c","e3cc389b4d31c79c","fe3f0e0002000801","fe3f0f0002000800","feff140000000000"]
+    visulize_intro_from_hashes(path, H, pause=1)
+    #for h, f, pos in hash_file(path):
+    #    print(pos/1000, str(h))
+    #    if str(h) in hx:
+    #        break
+
+
+@cli.command()
+def update_show_db():
+    # to lazy to do anything else.
+    import requests
+    import backoff
+
+    from frames.db import Show
+
+    session = requests.Session()
+
+    base_url = 'http://api.tvmaze.com/shows?page=%s'
+    pool = ThreadPool(5)
+
+    def fatal_code(e):
+        # tvmaze returns 404 if the page is missing.
+        if e.response.status_code == 404:
+            return True
+        elif e.response.status_code == 429:
+            LOG.debug('Need to slow down, to fast..')
+            return False
+        return False
+
+    @backoff.on_exception(backoff.expo,
+                          requests.exceptions.RequestException,
+                          giveup=fatal_code,
+                          logger='frames.cli')
+    def get(url):
+        result = session.get(url)
+
+        result.raise_for_status()
+        resp = result.json()
+        to_db = []
+
+        for r in resp:
+            s = Show(name=r['name'],
+                     imdb=r.get('externals', {}).get('imdb'),
+                     mazeid=r['id'],
+                     tvrage=r.get('externals', {}).get('tvrage'),
+                     tvdbid=r.get('externals', {}).get('thetvdb'))
+
+            to_db.append(s)
+
+        with session_scope() as se:
+            se.add_all(to_db)
+
+        LOG.debug('Added %s results from page' % (len(to_db), url.split('=')[1]))
+
+    try:
+        pool.map(get, [base_url % i for i in range(500)], 1)
+    except KeyboardInterrupt:
+        raise
+
+
+
+
+
+
+
+
 
 
 

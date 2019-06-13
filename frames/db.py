@@ -28,6 +28,14 @@ class Mixin():
     tvdbid = sa.Column(sa.Text(length=100))
 
 
+class Show(Mixin, Base):
+    __tablename__ = 'show'
+    imdb = sa.Column(sa.Text(length=100))
+    tvrage = sa.Column(sa.Integer)
+    mazeid = sa.Column(sa.Integer)
+    name = sa.Column(sa.Text(length=100))
+
+
 class Reference_Frame(Mixin, Base):
     __tablename__ = 'reference_frame'
     hash = sa.Column(sa.String(length=16))

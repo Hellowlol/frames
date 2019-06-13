@@ -1,11 +1,12 @@
 import base64
+import json
 import cv2
 
 import sqlalchemy as sa
 from sqlalchemy.sql import text
 
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -23,7 +24,7 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 # TODO Add auth middlewhere.
 
 
-def api_response(message='', status='success', data=None, task=None):
+def api_response(message='', status='success', data=None, task=None, **kwargs):
     """Skeleton for the api response"""
 
     if data is None:
@@ -77,22 +78,44 @@ async def dump_hashes_table(request):
     else:
         return api_response(status='error', message='Invalid table')
 
-    async for row in DB.iterate(table):
-        result.append(dict(row))
+    async def gen():
+        yield '{"status:"success", "message: "", data: ['
+        async for row in DB.iterate(table):
+            if row:
+                yield json.dumps(dict(row))
+                yield ','
+        yield "]}"
+    LOG.debug('dumping table %s to api' % name)
+    return StreamingResponse(gen(), media_type="application/json")
 
-    return api_response(data=result)
+
+@app.route('/api/query/')
+async def test_check_if_show_in_db(request):
+    """simple proxy for now later we will have our own db"""
+
+    import http3
+    q = request.query_params
+    client = http3.AsyncClient()
+
+    if q.get('q'):
+        url = 'http://api.tvmaze.com/singlesearch/shows?q=%s' % q.get('q')
+        result = await client.get(url)
+
+        result = result.json()
+        show_ids = result['externals']
+        print(show_ids)
+
+        res = await qq(show_ids['thetvdb'], q['season'])
+        if isinstance(res, dict):
+            return api_response(message=res['message'])
+        elif isinstance(res, list):
+            return api_response(data=res)
+        else:
+            return api_response(status='error')
 
 
-@app.route('/api/sql/{tvdbid:str}/{season:int}/{episode:int}')
-async def sql(request):
-    # http://localhost:8888/sql/248742/1/1
-
-    tvdbid = request.path_params['tvdbid']
-    season = request.path_params['season']
-    # Do we really need this?
-    episode = request.path_params['episode']
-
-    conf = 0.7
+async def qq(tvdbid, season):
+    conf = 0.7 # should be a config option?
     # this should probably be changed as we should just remove enogh episodes.
     episode_statement = text("SELECT COUNT(DISTINCT episode) FROM frames.hashes "
                              "WHERE tvdbid = :tvdbid and season = :season").bindparams(tvdbid=tvdbid,
@@ -103,8 +126,8 @@ async def sql(request):
     req_eps = num_epiodes * conf
     LOG.debug('%s season %s got %s episodes' % (tvdbid, season, num_epiodes))
 
-    if num_epiodes < 3:
-        return api_response(message="To few episodes in the db")
+    if num_epiodes < 3: # Be a config option?
+        return dict(message="To few episodes in the db")
 
     statement = text("SELECT hash FROM (SELECT * FROM frames.hashes "
                      "WHERE frames.hashes.tvdbid = :tvdbid "
@@ -122,9 +145,7 @@ async def sql(request):
     async for row in DB.iterate(statement):
         result.append(row.hash)
 
-    LOG.debug('%s season %s got %s hashes' % (tvdbid, season, len(result)))
-
-    return api_response(status='success', data=result)
+    return result
 
 
 @app.route('/api/image/{hash:str}')
