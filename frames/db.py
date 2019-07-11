@@ -25,7 +25,7 @@ def showsql(q):
 
 class Mixin():
     id = sa.Column(sa.Integer, primary_key=True)
-    tvdbid = sa.Column(sa.Text(length=100))
+    tvdbid = sa.Column(sa.Text(length=100), primary_key=True)
 
 
 class Show(Mixin, Base):
@@ -44,8 +44,8 @@ class Reference_Frame(Mixin, Base):
 
 class Hashes(Mixin, Base):
     __tablename__ = 'hashes'
-    season = sa.Column(sa.Integer)
-    episode = sa.Column(sa.Integer)
+    season = sa.Column(sa.Integer, primary_key=True)
+    episode = sa.Column(sa.Integer, primary_key=True)
     hash = sa.Column(sa.Text(length=16))
     offset = sa.Column(sa.Integer)
 
@@ -68,9 +68,9 @@ class UserImage(Mixin, Base):
     __tablename__ = 'userimage'
     hash = sa.Column(sa.String(length=16))
     type = sa.Column(sa.String(length=16))  # start or end
-    show = sa.Column(sa.Text(length=200))
-    season = sa.Column(sa.Integer)
-    episode = sa.Column(sa.Integer)
+    show = sa.Column(sa.Text(length=200), primary_key=True)
+    season = sa.Column(sa.Integer, primary_key=True)
+    episode = sa.Column(sa.Integer, primary_key=True)
     img = sa.Column(mysql.LONGBLOB)
 
 

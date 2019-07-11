@@ -63,7 +63,6 @@ async def homepage(request):
 async def dump_hashes_table(request):
     """Simple way to dump the tables to json."""
     name = request.path_params['name']
-    result = []
 
     if name == 'hashes':
         table = HASHES_T.select()
